@@ -35,9 +35,6 @@ class MainWindow(QMainWindow):
         self.original_pixmap = None
 
         # --- Настройки ---
-        # self.dpi_spin = QSpinBox(value=300, minimum=150, maximum=1200, suffix=" DPI")
-        # self.min_area_spin = QSpinBox(value=30, minimum=1, maximum=100000, suffix=" px")
-
         self.dpi_spin = QSpinBox()
         self.dpi_spin.setMinimum(50)
         self.dpi_spin.setMaximum(1200)
@@ -47,7 +44,7 @@ class MainWindow(QMainWindow):
         self.min_area_spin = QSpinBox()
         self.min_area_spin.setMinimum(1)
         self.min_area_spin.setMaximum(100000)
-        self.min_area_spin.setValue(30)  # Значение по-умолчанию
+        self.min_area_spin.setValue(1000)  # Значение по-умолчанию
         self.min_area_spin.setSuffix(" px")
 
         self.conn_combo = QComboBox()
@@ -134,26 +131,26 @@ class MainWindow(QMainWindow):
         results_actions_layout.addWidget(self.clear_btn)
         left_layout.addLayout(results_actions_layout)
 
-        # # ===============================================================
-        # # ДОНАТ
-        # # ===============================================================
-        #
-        # left_layout.addStretch(2)  # Добавим побольше отступ перед этим блоком
-        # tg_link = QLabel("<a href='https://t.me/PyOpsMaster'>Telegram чат с разработчиком</a>")
-        # tg_link.setTextFormat(Qt.RichText)
-        # tg_link.setOpenExternalLinks(True)
-        # tg_link.setAlignment(Qt.AlignCenter)
-        # donation_link = QLabel("<a href='https://pay.cloudtips.ru/p/85cd51e7'>"
-        #                        "# Поблагодарить за классный код #</a>")
-        # donation_link.setTextFormat(Qt.RichText)
-        # donation_link.setOpenExternalLinks(True)
-        # donation_link.setAlignment(Qt.AlignCenter)
-        # left_layout.addWidget(tg_link)
-        # left_layout.addWidget(donation_link)
-        #
-        # # ===============================================================
-        # # ДОНАТ КОНЕЦ
-        # # ===============================================================
+        # ===============================================================
+        # ДОНАТ
+        # ===============================================================
+
+        left_layout.addStretch(2)  # Добавим побольше отступ перед этим блоком
+        tg_link = QLabel("<a href='https://t.me/PyOpsMaster'>Telegram чат с разработчиком</a>")
+        tg_link.setTextFormat(Qt.RichText)
+        tg_link.setOpenExternalLinks(True)
+        tg_link.setAlignment(Qt.AlignCenter)
+        donation_link = QLabel("<a href='https://pay.cloudtips.ru/p/85cd51e7'>"
+                               "# Поблагодарить за классный код #</a>")
+        donation_link.setTextFormat(Qt.RichText)
+        donation_link.setOpenExternalLinks(True)
+        donation_link.setAlignment(Qt.AlignCenter)
+        left_layout.addWidget(tg_link)
+        left_layout.addWidget(donation_link)
+
+        # ===============================================================
+        # ДОНАТ КОНЕЦ
+        # ===============================================================
 
         left_w = QWidget()
         left_w.setLayout(left_layout)
@@ -167,7 +164,8 @@ class MainWindow(QMainWindow):
 
         self.tbl = QTableWidget(0, 4)
         self.tbl.setHorizontalHeaderLabels(self.COLUMN_HEADERS)
-        self.tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # self.tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
         self.tbl.setStyleSheet("QTableWidget::item { padding: 1px; }")
         header_style = """
@@ -180,9 +178,6 @@ class MainWindow(QMainWindow):
             }
         """
         self.tbl.horizontalHeader().setStyleSheet(header_style)
-
-        # self.tbl.horizontalHeader().setStyleSheet(header_style)
-
         self.tbl.verticalHeader().setDefaultSectionSize(20)  # Высота для всех строк таблицы
         # --- Клик по кнопке очистить таблицу ---
         self.tbl.cellClicked.connect(self.on_table_cell_clicked)
@@ -203,36 +198,6 @@ class MainWindow(QMainWindow):
 
         screen = self.screen().availableGeometry()
         self.resize(int(screen.width() * 0.8), int(screen.height() * 0.8))
-
-        # # --- Правая панель --- виджеты расположены горизонтально один над другим
-        # self.img_label = QLabel("Выберите папку с изображениями или файл и нажмите 'Process'")
-        # self.img_label.setAlignment(Qt.AlignCenter)
-        # self.scroll = QScrollArea()
-        # self.scroll.setWidgetResizable(True)
-        # self.scroll.setWidget(self.img_label)
-        #
-        # self.tbl = QTableWidget(0, 4)
-        # self.tbl.setHorizontalHeaderLabels(["Filename", "№ фигуры", "Area px", "Area cm²"])
-        # self.tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        # self.tbl.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
-        #
-        # # Уменьшаем отступы в ячейках
-        # self.tbl.setStyleSheet("QTableWidget::item { padding: 1px; }")
-        #
-        # right_layout = QVBoxLayout()
-        # right_layout.addWidget(self.scroll, 1)  # Равные пропорции
-        # right_layout.addWidget(self.tbl, 1)  # Равные пропорции
-        # right_w = QWidget()
-        # right_w.setLayout(right_layout)
-        #
-        # # --- Сборка интерфейса ---
-        # splitter = QSplitter(Qt.Horizontal)
-        # splitter.addWidget(left_w)
-        # splitter.addWidget(right_w)
-        # splitter.setStretchFactor(0, 1)
-        # splitter.setStretchFactor(1, 3)
-        # self.setCentralWidget(splitter)
-        # self.resize(1200, 700)
 
     def on_table_cell_clicked(self, row, column):
         """Отображает изображение, соответствующее выбранной строке в таблице."""
@@ -352,130 +317,211 @@ class MainWindow(QMainWindow):
             if first_image_path and os.path.exists(first_image_path):
                 self.display_image(first_image_path)
 
-    # def run_single_analysis(self, image_path):
-    #     _DPI = self.dpi_spin.value()
-    #     min_area_px = self.min_area_spin.value()
-    #     conn = 4 if self.conn_combo.currentIndex() == 0 else 8
-    #     cm2_per_px = (2.54 / _DPI) ** 2
-    #
-    #     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    #     if img is None:
-    #         return [], None
-    #
-    #     _, th = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    #     if np.count_nonzero(th == 255) > np.count_nonzero(th == 0):
-    #         th = cv2.bitwise_not(th)
-    #
-    #     k = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    #     th = cv2.morphologyEx(th, cv2.MORPH_OPEN, k, iterations=2)
-    #     th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, k, iterations=2)
-    #
-    #     n, lbl, stats, _ = cv2.connectedComponentsWithStats(th, connectivity=conn)
-    #     h, w = th.shape
-    #     records = []
-    #     color_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    #
-    #     for i in range(1, n):
-    #         x, y, wx, hy, area = stats[i]
-    #         if area < min_area_px or x == 0 or y == 0 or x + wx >= w or y + hy >= h:
-    #             continue
-    #
-    #         cm2 = round(area * cm2_per_px, 3)
-    #         num = len(records) + 1
-    #         records.append({"№ фигуры": num, "Кол-во пикселей": int(area), "Площадь": cm2})
-    #
-    #         cx, cy = x + wx // 2, y + hy // 2
-    #         cv2.putText(color_img, str(num), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX,
-    #                     2.1, (0, 0, 255), 3, cv2.LINE_AA)
-    #         cv2.rectangle(color_img, (x, y), (x + wx, y + hy), (0, 255, 0), 3)
-    #
-    #     filename = os.path.basename(image_path)
-    #     name_base = os.path.splitext(filename)[0]
-    #     # Добавляем дату и время к имени файла
-    #     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    #     name_out = f"{name_base}_processed_{timestamp}.png"
-    #     save_path = os.path.join(self.output_folder, name_out)
-    #     cv2.imwrite(save_path, color_img)
-    #
-    #     return records, save_path
-
-    # --- метод для обработки одного файла
-
-    def run_single_analysis(self, image_path: str):
-        _DPI = self.dpi_spin.value()
+    def run_single_analysis(self, image_path):
+        DPI = self.dpi_spin.value()
         min_area_px = self.min_area_spin.value()
         conn = 4 if self.conn_combo.currentIndex() == 0 else 8
-        cm2_per_px = (2.54 / _DPI) ** 2
+        cm_per_px = 2.54 / DPI
+        cm2_per_px = cm_per_px ** 2
 
-        # читаем в градациях серого
         img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if img is None:
             return [], None
 
-        # порог+инверсия так, чтобы фон был чёрным
-        _, th = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        if np.count_nonzero(th == 255) > np.count_nonzero(th == 0):
-            th = cv2.bitwise_not(th)
+        h, w = img.shape
 
-        # чуть-чуть «почистим» шум
-        k = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        th = cv2.morphologyEx(th, cv2.MORPH_OPEN, k, iterations=2)
-        th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, k, iterations=2)
-
-        # получаем компоненты
-        n, lbl, stats, _ = cv2.connectedComponentsWithStats(th, connectivity=conn)
-        h, w = th.shape
-        records = []
-        color_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-
-        for i in range(1, n):
-            x, y, wx, hy, area_outline = stats[i]
-            # отбрасываем мелкие и «обрезанные» на границе
-            if (area_outline < min_area_px
-                    or x == 0 or y == 0
-                    or x + wx >= w or y + hy >= h):
-                continue
-
-            # маска текущей компоненты, 0/255
-            comp_mask = (lbl == i).astype('uint8') * 255
-
-            # находим внешний контур(ы)
-            contours, _ = cv2.findContours(
-                comp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
-            # рисуем их залитым
-            filled_mask = np.zeros_like(comp_mask)
-            cv2.drawContours(filled_mask, contours, -1, 255, thickness=cv2.FILLED)
-
-            # теперь полная площадь в пикселях
-            full_px = int(np.count_nonzero(filled_mask))
-            cm2 = round(full_px * cm2_per_px, 3)
-            num = len(records) + 1
-
-            records.append({
-                "№ фигуры": num,
-                "Кол-во пикселей": full_px,
-                "Площадь": cm2
-            })
-
-            # подписываем на цветном изображении
-            cx, cy = x + wx // 2, y + hy // 2
-            cv2.putText(color_img, str(num), (cx, cy),
-                        cv2.FONT_HERSHEY_SIMPLEX, 2.1, (0, 0, 255), 3, cv2.LINE_AA)
-            cv2.rectangle(color_img, (x, y),
-                          (x + wx, y + hy), (0, 255, 0), 3)
-
-        # сохраняем результат
+        debug_root = os.path.join(self.output_folder, "debug")
+        os.makedirs(debug_root, exist_ok=True)
         filename = os.path.basename(image_path)
         name_base = os.path.splitext(filename)[0]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        name_out = f"{name_base}_processed_{timestamp}.png"
-        save_path = os.path.join(self.output_folder, name_out)
-        cv2.imwrite(save_path, color_img)
+        debug_folder = os.path.join(debug_root, name_base)
+        os.makedirs(debug_folder, exist_ok=True)
 
-        return records, save_path
+        log_path = os.path.join(debug_folder, f"{name_base}.txt")
+        log = open(log_path, "w", encoding="utf-8")
+
+        def write(line):
+            log.write(line + "\n")
+
+        try:
+            write(f"=== ОТЛАДКА для {filename} ===")
+            write(f"Размер изображения: {w}x{h} пикселей")
+            write(f"DPI: {DPI}")
+            write(f"Сантиметров на пиксель: {cm_per_px:.6f}")
+            write(f"Площадь одного пикселя: {cm2_per_px:.8f} см²")
+            write(f"Минимальная площадь фигуры: {min_area_px} пикселей")
+            write(f"Связность: {conn}")
+
+            # Бинаризация
+            _, binary = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+            white_count = np.sum(binary == 255)
+            black_count = np.sum(binary == 0)
+            write(f"После бинаризации (OTSU): белых={white_count}, черных={black_count}")
+
+            # Анализ краев для определения фона
+            edges = np.concatenate([
+                binary[0, :], binary[-1, :], binary[:, 0], binary[:, -1]
+            ])
+            edge_white = np.sum(edges == 255)
+            edge_black = np.sum(edges == 0)
+            write(f"Анализ краев: белых={edge_white}, черных={edge_black}")
+
+            # Определение фона
+            background_is_white = edge_white > edge_black
+            write(f"Фон определен как: {'белый' if background_is_white else 'черный'}")
+
+            # Инверсия если нужно (объекты должны быть белыми на черном фоне)
+            if background_is_white:
+                binary = cv2.bitwise_not(binary)
+                write("Применена инверсия изображения")
+
+            # Сохранение промежуточных результатов
+            cv2.imwrite(os.path.join(debug_folder, "01_original.png"), img)
+            cv2.imwrite(os.path.join(debug_folder, "02_binary.png"), binary)
+
+            # Морфологические операции для улучшения качества
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+            write("Применены улучшенные морфологические операции")
+            cv2.imwrite(os.path.join(debug_folder, "03_morphology.png"), binary)
+
+            # FloodFill из углов для удаления краевых артефактов
+            flood_mask = np.zeros((h + 2, w + 2), np.uint8)
+            corners = [(0, 0), (0, w - 1), (h - 1, 0), (h - 1, w - 1)]
+            flood_count = 0
+
+            for corner in corners:
+                if binary[corner] == 255:  # Если угол белый (объект)
+                    # cv2.floodFill(binary, flood_mask, corner, 0)
+                    cv2.floodFill(binary, flood_mask, corner, (0,))
+                    flood_count += 1
+
+            write(f"FloodFill применен из {flood_count} углов")
+            cv2.imwrite(os.path.join(debug_folder, "04_floodfill.png"), binary)
+
+            # Заполнение дыр
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # cv2.fillPoly(binary, contours, 255)
+            cv2.fillPoly(binary, contours, (255,))
+            write("Применено заполнение дыр")
+            cv2.imwrite(os.path.join(debug_folder, "05_filled.png"), binary)
+
+            # Поиск связанных компонентов
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+                binary, connectivity=conn
+            )
+
+            # Исключаем фон (метка 0)
+            actual_components = num_labels - 1
+            write(f"Найдено связанных компонентов: {actual_components} (исключая фон)")
+
+            # Калибровка
+            total_area_cm2 = (w * h) * cm2_per_px
+            a4_area_cm2 = 21.0 * 29.7
+            calibration_factor = a4_area_cm2 / total_area_cm2 if total_area_cm2 > 0 else 1.0
+
+            write(f"\nКАЛИБРОВКА:")
+            write(f"Теоретическая площадь изображения: {total_area_cm2:.2f} см²")
+            write(f"Площадь листа A4: {a4_area_cm2:.2f} см²")
+            write(f"Коэффициент калибровки: {calibration_factor:.4f}")
+
+            # Анализ компонентов
+            results = []
+            accepted_count = 0
+            filtered_count = 0
+            total_accepted_area = 0.0
+
+            write(f"\nАНАЛИЗ КОМПОНЕНТОВ:")
+
+            # Создаем цветное изображение для визуализации
+            result_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+            for i in range(1, num_labels):  # Пропускаем фон (i=0)
+                area_px = stats[i, cv2.CC_STAT_AREA]
+
+                # Исправленная логика фильтрации
+                max_reasonable_area = (w * h) * 0.8  # Максимум 80% от общей площади
+
+                if area_px < min_area_px:
+                    write(f"  Компонент {i}: ОТФИЛЬТРОВАН - слишком маленький ({area_px} < {min_area_px} пикселей)")
+                    filtered_count += 1
+                    continue
+
+                if area_px > max_reasonable_area:
+                    write(
+                        f"  Компонент {i}: ОТФИЛЬТРОВАН - "
+                        f"слишком большой ({area_px} > {max_reasonable_area:.0f} пикселей)")
+                    filtered_count += 1
+                    continue
+
+                # Компонент принят
+                area_cm2 = area_px * cm2_per_px * calibration_factor
+                x, y, w_comp, h_comp = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[
+                    i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+                cx, cy = centroids[i]
+
+                num = len(results) + 1
+                results.append({
+                    "№ фигуры": num,
+                    "Кол-во пикселей": int(area_px),
+                    "Площадь": round(area_cm2, 3),  # Округляем до 3 знаков после запятой
+                    "Центроид": (int(cx), int(cy)),
+                    "Рамка": (x, y, w_comp, h_comp)
+                })
+
+                accepted_count += 1
+                total_accepted_area += area_cm2
+
+                write(f"  Компонент {i}: ПРИНЯТ - площадь {area_px} пикс ({area_cm2:.3f} см²)")
+
+                # Рисуем рамку вокруг принятого компонента
+                cv2.rectangle(result_img, (int(x), int(y)), (int(x + w_comp), int(y + h_comp)), (0, 255, 0), 5)
+                label = f"{num}"
+                cv2.putText(result_img, label, (int(cx), int(cy)), cv2.FONT_HERSHEY_SIMPLEX,
+                            3, (0, 0, 255), 5, cv2.LINE_AA)
+
+            write(f"\nРЕЗУЛЬТАТ:")
+            write(f"Принято фигур: {accepted_count}")
+            write(f"Отфильтровано: {filtered_count}")
+            write(f"Общая площадь принятых фигур: {total_accepted_area:.3f} см²")
+
+            # Сохраняем результат
+            output_filename = f"{name_base}_processed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            output_path = os.path.join(self.output_folder, output_filename)
+            cv2.imwrite(output_path, result_img)
+            write(f"Результат сохранен: {output_filename}")
+
+            # Сохраняем дополнительные отладочные изображения
+            cv2.imwrite(os.path.join(debug_folder, "06_components.png"), result_img)
+
+            # Создаем изображение с подписанными компонентами
+            labeled_img = cv2.applyColorMap((labels * 255 // num_labels).astype(np.uint8), cv2.COLORMAP_JET)
+            cv2.imwrite(os.path.join(debug_folder, "07_labeled.png"), labeled_img)
+
+            debug_files_count = len([f for f in os.listdir(debug_folder) if f.endswith('.png')])
+            write(
+                f"Отладочные изображения ({debug_files_count} шт.) "
+                f"сохранены в папку: {os.path.relpath(debug_folder, self.output_folder)}/")
+            write("=" * 50)
+
+            result_filename = f"processed_{os.path.basename(image_path)}"
+            result_path = os.path.join(self.output_folder, result_filename)
+            cv2.imwrite(result_path, result_img)
+
+            return results, result_path
+
+        except Exception as e:
+            write(f"ОШИБКА: {str(e)}")
+            import traceback
+            write(traceback.format_exc())
+            return [], None
+        finally:
+            log.close()
 
     def process_single_file(self):
+        """Метод для обработки одного файла"""
         file_path = self.input_file_edit.text()
         if not file_path or not os.path.exists(file_path):
             self.img_label.setText("Выберите корректный файл изображения.")
@@ -501,7 +547,6 @@ class MainWindow(QMainWindow):
         if result_path:
             self.display_image(result_path)
 
-    # ----- метод для выбора одного файла
     def browse_input_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
