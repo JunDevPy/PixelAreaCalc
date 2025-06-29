@@ -1,0 +1,231 @@
+    def run_single_analysis(self, image_path):
+        """Обрабатывает один файл, возвращает список записей и путь к сохранённому изображению."""
+        DPI = self.dpi_spin.value()
+        min_area_px = self.min_area_spin.value()
+        conn = 4 if self.conn_combo.currentIndex() == 0 else 8
+
+        # сколько сантиметров в одном пикселе
+        cm_per_px = 2.54 / DPI
+        # площадь одного пикселя в см²
+        cm2_per_px = cm_per_px ** 2
+
+        # читаем изображение в градациях серого
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            print(f"ОШИБКА: Не удалось загрузить изображение {image_path}")
+            return [], None
+
+        print(f"\n=== ОТЛАДКА для {os.path.basename(image_path)} ===")
+        h, w = img.shape
+        print(f"Размер изображения: {w}x{h} пикселей")
+        print(f"DPI: {DPI}")
+        print(f"Сантиметров на пиксель: {cm_per_px:.6f}")
+        print(f"Площадь одного пикселя: {cm2_per_px:.8f} см²")
+        print(f"Минимальная площадь фигуры: {min_area_px} пикселей")
+        print(f"Связность: {conn}")
+
+        # Создаем папку для отладочных изображений
+        debug_folder = os.path.join(self.output_folder, "debug")
+        os.makedirs(debug_folder, exist_ok=True)
+        filename = os.path.basename(image_path)
+        name_base = os.path.splitext(filename)[0]
+
+        # ЭТАП 1: Исходное изображение
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_01_original.png"), img)
+
+        # ЭТАП 2: Улучшение контраста и размытие для уменьшения шума
+        # Применяем адаптивную гистограммную эквализацию
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        img_enhanced = clahe.apply(img)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_02_enhanced.png"), img_enhanced)
+
+        # Небольшое размытие для уменьшения шума
+        img_blurred = cv2.GaussianBlur(img_enhanced, (3, 3), 0)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_03_blurred.png"), img_blurred)
+
+        # ЭТАП 3: Более агрессивная бинаризация
+        # Пробуем несколько методов бинаризации
+        _, th_otsu = cv2.threshold(img_blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        th_adaptive = cv2.adaptiveThreshold(img_blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                            cv2.THRESH_BINARY, 21, 10)
+
+        # Выбираем лучший результат (где меньше шума)
+        white_otsu = np.count_nonzero(th_otsu == 255)
+        white_adaptive = np.count_nonzero(th_adaptive == 255)
+
+        if white_otsu < white_adaptive:
+            th = th_otsu.copy()
+            method_used = "OTSU"
+        else:
+            th = th_adaptive.copy()
+            method_used = "Adaptive"
+
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_04_binary_{method_used.lower()}.png"), th)
+
+        white_pixels_before = np.count_nonzero(th == 255)
+        black_pixels_before = np.count_nonzero(th == 0)
+        print(f"После бинаризации ({method_used}): белых={white_pixels_before}, черных={black_pixels_before}")
+
+        # ЭТАП 4: Определение фона по краям изображения
+        edge_width = 20
+        edges = []
+        edges.extend(th[:edge_width, :].flatten())  # верхний край
+        edges.extend(th[-edge_width:, :].flatten())  # нижний край
+        edges.extend(th[:, :edge_width].flatten())  # левый край
+        edges.extend(th[:, -edge_width:].flatten())  # правый край
+
+        edge_white = np.count_nonzero(np.array(edges) == 255)
+        edge_black = np.count_nonzero(np.array(edges) == 0)
+        background_is_white = edge_white > edge_black
+
+        print(f"Анализ краев: белых={edge_white}, черных={edge_black}")
+        print(f"Фон определен как: {'белый' if background_is_white else 'черный'}")
+
+        # Инвертируем если фон белый (фигуры должны быть белыми)
+        if background_is_white:
+            th = cv2.bitwise_not(th)
+            print("Применена инверсия изображения")
+        else:
+            print("Инверсия не применялась")
+
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_05_inverted.png"), th)
+
+        # ЭТАП 5: Более сильные морфологические операции
+        # Используем разные размеры ядер для разных операций
+        kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        kernel_medium = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+        # Удаляем шум
+        th_opened = cv2.morphologyEx(th, cv2.MORPH_OPEN, kernel_small, iterations=2)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_06_opened.png"), th_opened)
+
+        # Заполняем пробелы в фигурах
+        th_closed = cv2.morphologyEx(th_opened, cv2.MORPH_CLOSE, kernel_medium, iterations=3)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_07_closed.png"), th_closed)
+
+        # Дополнительное расширение для соединения близких частей
+        th_dilated = cv2.dilate(th_closed, kernel_small, iterations=1)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_08_dilated.png"), th_dilated)
+
+        print("Применены улучшенные морфологические операции")
+
+        # ЭТАП 6: Заполнение дыр
+        flood = th_dilated.copy()
+        mask = np.zeros((h + 2, w + 2), np.uint8)
+
+        # Проверяем углы и заливаем черные области
+        corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+        filled_corners = 0
+        for fx, fy in corners:
+            if flood[fy, fx] == 0:  # Если угол черный
+                cv2.floodFill(flood, mask, (fx, fy), 255)
+                filled_corners += 1
+
+        print(f"FloodFill применен из {filled_corners} углов")
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_09_flooded.png"), flood)
+
+        # Получаем маску дыр
+        holes = cv2.bitwise_not(flood)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_10_holes.png"), holes)
+
+        # Объединяем с исходным изображением
+        th_filled = cv2.bitwise_or(th_dilated, holes)
+        cv2.imwrite(os.path.join(debug_folder, f"{name_base}_11_filled.png"), th_filled)
+        print("Применено заполнение дыр")
+
+        # ЭТАП 7: Поиск компонентов
+        n, labels, stats, centroids = cv2.connectedComponentsWithStats(th_filled, connectivity=conn)
+        print(f"Найдено связанных компонентов: {n - 1} (исключая фон)")
+
+        # Создаем цветную карту компонентов для визуализации
+        if n > 1:
+            labels_vis = ((labels * 255) // (n - 1)).astype(np.uint8)
+            labels_colored = cv2.applyColorMap(labels_vis, cv2.COLORMAP_JET)
+            cv2.imwrite(os.path.join(debug_folder, f"{name_base}_12_components.png"), labels_colored)
+
+        # калибровка по листу A4
+        A4_W_CM, A4_H_CM = 21.0, 29.7
+        real_sheet_cm2 = A4_W_CM * A4_H_CM
+        raw_sheet_cm2 = (h * w) * cm2_per_px
+        calibration_k = real_sheet_cm2 / raw_sheet_cm2
+
+        print(f"\nКАЛИБРОВКА:")
+        print(f"Теоретическая площадь изображения: {raw_sheet_cm2:.2f} см²")
+        print(f"Площадь листа A4: {real_sheet_cm2:.2f} см²")
+        print(f"Коэффициент калибровки: {calibration_k:.4f}")
+
+        records = []
+        color_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+        print(f"\nАНАЛИЗ КОМПОНЕНТОВ:")
+        filtered_count = 0
+
+        for i in range(1, n):
+            x, y, wx, hy, area_px = stats[i]
+
+            # Более строгая фильтрация
+            touches_border = (x <= 2 or y <= 2 or x + wx >= w - 2 or y + hy >= h - 2)
+            too_small = area_px < min_area_px
+            too_big = area_px > (h * w * 0.5)  # Больше 50% изображения
+
+            # Фильтрация по соотношению сторон (избегаем тонких линий)
+            aspect_ratio = max(wx, hy) / min(wx, hy) if min(wx, hy) > 0 else 1000
+            too_thin = aspect_ratio > 10  # Соотношение сторон больше 10:1
+
+            # Фильтрация по плотности (отношение площади к площади bounding box)
+            bbox_area = wx * hy
+            density = area_px / bbox_area if bbox_area > 0 else 0
+            too_sparse = density < 0.3  # Менее 30% заполнения bounding box
+
+            if too_small or touches_border or too_big or too_thin or too_sparse:
+                filtered_count += 1
+                reason = []
+                if too_small:
+                    reason.append(f"мала ({area_px}<{min_area_px})")
+                if touches_border:
+                    reason.append("касается края")
+                if too_big:
+                    reason.append("слишком большая")
+                if too_thin:
+                    reason.append(f"слишком вытянута ({aspect_ratio:.1f}:1)")
+                if too_sparse:
+                    reason.append(f"разреженная ({density:.2f})")
+                print(f"  Компонент {i}: ОТФИЛЬТРОВАН - {', '.join(reason)}")
+                continue
+
+            # «сырая» и откалиброванная площадь в см²
+            raw_cm2 = area_px * cm2_per_px
+            calibrated_cm2 = round(raw_cm2 * calibration_k, 3)
+
+            num = len(records) + 1
+            records.append({
+                "№ фигуры": num,
+                "Кол-во пикселей": int(area_px),
+                "Площадь": calibrated_cm2
+            })
+
+            print(f"  Фигура {num}: {area_px} пикс = {raw_cm2:.3f} см² (сырая) = {calibrated_cm2:.3f} см² (калибр.)")
+            print(
+                f"    Позиция: ({x},{y}), размер: {wx}x{hy}, соотношение: {aspect_ratio:.1f}:1, плотность: {density:.2f}")
+
+            # рисуем рамку и нумеруем фигуру
+            cx, cy = x + wx // 2, y + hy // 2
+            cv2.putText(color_img, str(num), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX,
+                        2.1, (0, 0, 255), 3, cv2.LINE_AA)
+            cv2.rectangle(color_img, (x, y), (x + wx, y + hy), (0, 255, 0), 3)
+
+        print(f"\nРЕЗУЛЬТАТ:")
+        print(f"Принято фигур: {len(records)}")
+        print(f"Отфильтровано: {filtered_count}")
+        print(f"Общая площадь принятых фигур: {sum(r['Площадь'] for r in records):.3f} см²")
+
+        # сохраняем результат
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name_out = f"{name_base}_processed_{timestamp}.png"
+        save_path = os.path.join(self.output_folder, name_out)
+        cv2.imwrite(save_path, color_img)
+        print(f"Результат сохранен: {name_out}")
+        print(f"Отладочные изображения (12 шт.) сохранены в папку: debug/")
+        print("=" * 50)
+
+        return records, save_path
