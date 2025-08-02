@@ -22,6 +22,13 @@ from src.image_processor import analyze_image
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.run_btn = None
+        self.output_folder_edit = None
+        self.input_file_edit = None
+        self.input_folder_edit = None
+        self.conn_combo = None
+        self.min_area_spin = None
+        self.dpi_spin = None
         self.setWindowTitle("--- Расчет площади фигур на изображении методом подсчета пикселей--- GUI")
 
         self.COLUMN_HEADERS = COLUMN_HEADERS
@@ -193,6 +200,9 @@ class MainWindow(QWidget):
         main_layout = QVBoxLayout()
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
+
+        screen = self.screen().availableGeometry()
+        self.resize(int(screen.width() * 0.8), int(screen.height() * 0.8))
 
     def on_table_cell_clicked(self, row, column):
         if self.df is None or self.df.empty:
