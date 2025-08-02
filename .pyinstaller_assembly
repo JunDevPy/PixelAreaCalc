@@ -1,0 +1,10 @@
+# Команда для сборки с исключением некоторых пакетов и UPX сжатием
+
+pyinstaller --onefile --windowed --uac-admin --clean --strip="False" --upx-dir="E:\svetofor\upx" --icon="icon.ico" --hidden-import="pandas" --hidden-import="cv2" --exclude-module="u
+nittest" --exclude-module="pytest" --exclude-module="test" --exclude-module="tkinter"  --name="PixelAreaCalc_v3_alpha" gui_v3_alpha.py
+
+
+Без использования сжатия:
+
+pyinstaller --onefile --windowed --uac-admin --clean --strip --icon="icon.ico" --hidden-import="pandas" --hidden-import="cv2" --exclude-module="u
+nittest" --exclude-module="pytest" --exclude-module="test" --exclude-module="tkinter"  --name="PixelAreaCalc_v3_alpha" gui_v3_alpha.py
