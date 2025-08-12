@@ -2,24 +2,166 @@
 Класс который непосредственно проводит обработку и анализ изображений
 """
 
-import os
-from datetime import datetime
-
 import cv2
 import numpy as np
-
+import os
+from typing import Tuple
 from src.file_manager import safe_imread, safe_img_write
 
 
-def analyze_image(image_path: str, output_folder: str, dpi: int, min_area_px: int, connectivity: int):
+def _run_length_from_start(arr: np.ndarray, tolerance: int, start_val: int) -> int:
+    """Считает длину начального пробега значений, близких к start_val (по оси arr)."""
+    count = 0
+    for px in arr:
+        if abs(int(px) - int(start_val)) <= tolerance:
+            count += 1
+        else:
+            break
+    return count
+
+
+def _estimate_edge_thicknesses(binary: np.ndarray, tolerance: int = 10, samples: int = 50,
+                               max_frac: float = 0.25, ) -> Tuple[int, int, int, int]:
+    """
+    Оценка толщины рамки по каждому краю: (top, right, bottom, left).
+    Используется несколько срезов и берётся низкий перцентиль для устойчивости.
+    """
+    h, w = binary.shape
+
+    # какие строки/столбцы пробовать
+    rows = np.linspace(0, h - 1, num=min(samples, h), dtype=int)
+    cols = np.linspace(0, w - 1, num=min(samples, w), dtype=int)
+
+    left_runs = []
+    right_runs = []
+    top_runs = []
+    bottom_runs = []
+
+    # Левый/правый: считаем по строкам, вдоль X
+    for r in rows:
+        row = binary[r, :]
+
+        # слева
+        left_start = int(row[0])
+        left_runs.append(_run_length_from_start(row, tolerance, left_start))
+
+        # справа
+        right_start = int(row[-1])
+        right_runs.append(_run_length_from_start(row[::-1], tolerance, right_start))
+
+    # Верх/низ: считаем по столбцам, вдоль Y
+    for c in cols:
+        col = binary[:, c]
+
+        # сверху
+        top_start = int(col[0])
+        top_runs.append(_run_length_from_start(col, tolerance, top_start))
+
+        # снизу
+        bottom_start = int(col[-1])
+        bottom_runs.append(_run_length_from_start(col[::-1], tolerance, bottom_start))
+
+    # Берём «консервативную» оценку: 10-й перцентиль (а не максимум),
+    # чтобы единичные большие участки сплошного фона не сносили всё.
+    def robust_width(runs, limit):
+        if not runs:
+            return 0
+        val = int(np.percentile(runs, 10))
+        # если пробег практически равен всему размеру — считаем, что рамки нет
+        if val >= limit * 0.95:
+            return 0
+        # ограничим разумной долей от размера
+        return int(min(val, limit * max_frac))
+
+    top = robust_width(top_runs, h)
+    bottom = robust_width(bottom_runs, h)
+    left = robust_width(left_runs, w)
+    right = robust_width(right_runs, w)
+
+    return top, right, bottom, left
+
+
+def estimate_frame_width(binary: np.ndarray, tolerance: int = 10) -> int:
+    """
+    Оставлено для обратной совместимости: возвращает максимальную толщину
+    по краям, используя улучшённую оценку.
+    """
+    t, r, b, l = _estimate_edge_thicknesses(binary, tolerance=tolerance)
+    return max(t, r, b, l)
+
+
+def remove_frame(
+        binary: np.ndarray,
+        remove_frame_flag: bool,
+        frame_mode: str = "auto",
+        frame_width_px: int = 0,
+        tolerance: int = 10,
+        debug_folder: str = None,
+        per_edge: bool = True,
+) -> np.ndarray:
+    """
+    Убирает рамку в бинарном изображении, устанавливая её в 0 (чёрный).
+    Внимание: работает с копией входного массива.
+    """
+    if not remove_frame_flag:
+        return binary
+
+    assert binary.ndim == 2, "Ожидается бинарное изображение (H, W)"
+    h, w = binary.shape
+    out = binary.copy()
+
+    if frame_mode.lower() == "fixed":
+        fw = max(0, int(frame_width_px))
+        top = bottom = left = right = fw
+    else:
+        # автооценка по каждому краю
+        top, right, bottom, left = _estimate_edge_thicknesses(out, tolerance=tolerance)
+        if not per_edge:
+            # опционально можно использовать единое значение
+            fw = max(top, right, bottom, left)
+            top = bottom = left = right = fw
+
+    # Дополнительные предохранители: не позволяем «съесть» более трети изображения
+    max_top = min(top, h // 3)
+    max_bottom = min(bottom, h // 3)
+    max_left = min(left, w // 3)
+    max_right = min(right, w // 3)
+
+    if max_left > 0:
+        out[:, :max_left] = 0
+    if max_right > 0:
+        out[:, w - max_right:] = 0
+    if max_top > 0:
+        out[:max_top, :] = 0
+    if max_bottom > 0:
+        out[h - max_bottom:, :] = 0
+
+    if debug_folder:
+        os.makedirs(debug_folder, exist_ok=True)
+        cv2.imwrite(os.path.join(debug_folder, "03b_frame_removed.png"), out)
+
+    return out
+
+
+def analyze_image(image_path: str, output_folder: str, dpi: int, min_area_px: int, connectivity: int,
+                  remove_frame_flag: bool = False, frame_mode: str = 'auto', frame_width: int = 30):
     """
     Анализ изображения - поиск фигур, расчет площади,
     сохранение результатов (отладка, визуализация).
     Возвращает: список результатов и путь к итоговому изображению.
+    Добавлена опция удаления рамки.
     """
     img = safe_imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
+        # raise FileNotFoundError(f"Не удалось открыть {image_path}")
         return [], None
+
+    # Удаление рамки, если включено
+    _, binary_img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+
+    # img = remove_frame(img, remove_frame_flag, frame_mode, frame_width)
+    img = remove_frame(binary=binary_img, remove_frame_flag=remove_frame_flag, frame_mode=frame_mode,
+                       frame_width_px=frame_width, tolerance=12, debug_folder="debug", per_edge=True, )
 
     h, w = img.shape
 
@@ -123,13 +265,14 @@ def analyze_image(image_path: str, output_folder: str, dpi: int, min_area_px: in
                 continue
 
             if area_px > max_reasonable_area:
-                write(f"  Компонент {i}: ОТФИЛЬТРОВАН - слишком большой ({area_px} > {max_reasonable_area:.0f} пикселей)")
+                write(f"  Компонент {i}: ОТФИЛЬТРОВАН - слишком большой "
+                      f"({area_px} > {max_reasonable_area:.0f} пикселей)")
                 filtered_count += 1
                 continue
 
             area_cm2 = area_px * cm2_per_px * calibration_factor
             x, y, w_comp, h_comp = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], \
-                                   stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+                stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
             cx, cy = centroids[i]
 
             num = len(results) + 1
@@ -170,7 +313,9 @@ def analyze_image(image_path: str, output_folder: str, dpi: int, min_area_px: in
         cv2.imwrite(os.path.join(debug_folder, "07_labeled.png"), labeled_img)
 
         debug_files_count = len([f for f in os.listdir(debug_folder) if f.endswith('.png')])
-        write(f"Отладочные изображения ({debug_files_count} шт.) сохранены в папку: {os.path.relpath(debug_folder, output_folder)}/")
+        write(
+            f"Отладочные изображения ({debug_files_count} шт.) сохранены в папку: "
+            f"{os.path.relpath(debug_folder, output_folder)}/")
         write("=" * 50)
 
         return results, result_path

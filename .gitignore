@@ -1,2 +1,16 @@
-results
+results/
 .idea
+__pycache__/
+.build/
+dist/
+debug/
+img/
+patch/
+
+*.pyc
+*.pyo
+*.pyd
+*.spec
+image_analysis_tool.md
+listing.md
+run_process_frame.py
