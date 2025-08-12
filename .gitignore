@@ -2,6 +2,7 @@ results/
 .idea
 __pycache__/
 .build/
+build/
 dist/
 debug/
 img/
